@@ -18,20 +18,16 @@
 #pragma once
 
 #include <string>
-#include <variant>
 #include <map>
 #include <memory>
 #include "Space.h"
 #include "Helpers.h"
 #include "Point.h"
 #include "Projection.h"
+#include "log.h"
+#include "RawData.h"
 
-// TODO move to python specific file
-struct _object;
-typedef _object PyObject;
-class NodeWrapper;
 class GraphBase;
-PyObject * to_object(GraphBase* graph);
 
 /** Enumeration of the roles of vanishing points */
 enum class VPRole : char {
@@ -61,30 +57,132 @@ inline std::pair<precission,precission> vector_to_angle(const Quaternion & vecto
     };
 }
 
+/** return focal length equivalent for 35mm format */
+inline precission vector_to_lens_mm(const Quaternion & vector) {
+    Quaternion normalized = normalize(vector);
+    Quaternion forward = Quaternion::FORWARD();
+    precission angleCos =  dot(normalized, forward);
+    precission angleSin = length(cross(normalized, forward));
+    constexpr precission half35mm = 36.0/2.0; // NOTE: 35mm is 24 x 36 mm
+    return angleCos/angleSin * half35mm;
+}
 
+struct NodeVariant {
+    enum class NODE_TYPE : int8_t {
+        NONE = 0,
+        PERSPECTIVE_SPACE = 1,
+        PLANE = 2,
+        VANISHING_POINT = 3,
+        RECTILINEAR_PROJECTION = 4,
+        CURVILINEAR_PERSPECTIVE = 5,
+        PERSPECTIVE_GROUP = 6,
+    };
+    struct {
+        std::unique_ptr<PerspectiveSpace> perspectiveSpace;
+        Plane plane;
+        std::unique_ptr<VanishingPoint> vanishingPoint;
+        std::unique_ptr<RectilinearProjection> rectilinearProjection;
+        std::unique_ptr<CurvilinearPerspective> curvilinearPerspective;
+        PerspectiveGroup perspectiveGroup;
+    } node;
+    NODE_TYPE nodeType = NODE_TYPE::NONE;
+    void set(PerspectiveSpace space) {
+        node.perspectiveSpace = std::make_unique<PerspectiveSpace>(space);
+        nodeType = NODE_TYPE::PERSPECTIVE_SPACE;
+    }
+    void set(Plane plane) {
+        node.plane = plane;
+        nodeType = NODE_TYPE::PLANE;
+    }
+    void set(VanishingPoint vp) {
+        node.vanishingPoint = std::make_unique<VanishingPoint>(vp);
+        nodeType = NODE_TYPE::VANISHING_POINT;
+    }
+    void set(RectilinearProjection projection) {
+        node.rectilinearProjection = std::make_unique<RectilinearProjection>(projection);
+        nodeType = NODE_TYPE::RECTILINEAR_PROJECTION;
+    }
+    void set(CurvilinearPerspective projection) {
+        node.curvilinearPerspective = std::make_unique<CurvilinearPerspective>(projection);
+        nodeType = NODE_TYPE::CURVILINEAR_PERSPECTIVE;
+    }
+    void set(PerspectiveGroup group) {
+        node.perspectiveGroup = group;
+        nodeType = NODE_TYPE::PERSPECTIVE_GROUP;
+    }
+    bool is(NODE_TYPE type ) {
+        return nodeType == type;
+    }
+    template<typename T> T & get() = delete;
+};
 
+template<> inline PerspectiveSpace & NodeVariant::get<PerspectiveSpace>() {
+    if (nodeType == NODE_TYPE::PERSPECTIVE_SPACE) {
+        return *node.perspectiveSpace;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
 
+template<> inline Plane & NodeVariant::get<Plane>() {
+    if (nodeType == NODE_TYPE::PLANE) {
+        return node.plane;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
+
+template<> inline VanishingPoint & NodeVariant::get<VanishingPoint>() {
+    if (nodeType == NODE_TYPE::VANISHING_POINT) {
+        return *node.vanishingPoint;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
+
+template<> inline RectilinearProjection & NodeVariant::get<RectilinearProjection>() {
+    if (nodeType == NODE_TYPE::RECTILINEAR_PROJECTION) {
+        return *node.rectilinearProjection;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
+
+template<> inline CurvilinearPerspective & NodeVariant::get<CurvilinearPerspective>() {
+    if (nodeType == NODE_TYPE::CURVILINEAR_PERSPECTIVE) {
+        return *node.curvilinearPerspective;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
+
+template<> inline PerspectiveGroup & NodeVariant::get<PerspectiveGroup>() {
+    if (nodeType == NODE_TYPE::PERSPECTIVE_GROUP) {
+        return node.perspectiveGroup;
+    } else {
+        throw std::runtime_error("unknown node variant");
+    }
+}
 
 class NodeWrapper {
-private:
+public:
     struct RelationItem {
         NodeWrapper * node;
         NodeRelation relation;
     };
-    /** VP position is computed from other nodes */
-    std::variant<int,PerspectiveSpace,Plane,VanishingPoint,RectilinearProjection,CurvilinearPerspective,PerspectiveGroup> node = 0;
+private:
+    NodeVariant node;
     std::vector<RelationItem> _relations;
-    friend PyObject * to_object(GraphBase *);
     bool isCompute = false;
 public:
     bool enabled = true;
     bool locked = false;
     VPRole role = VPRole::NORMAL;
-    int uid;    // TODO make it immutable in c++
+    int uid;
     std::string name;
     std::vector<NodeWrapper *> _children;
     std::vector<precission> _compute_additional_params;
-    long color = 0; // rgba // TODO change to int?
+    unsigned color = 0; // rgba
     void (NodeWrapper::* _compute)(std::vector<NodeWrapper*>,std::vector<precission>) = nullptr;
     std::string compute_function_name;
     bool parent_enabled = true;
@@ -110,62 +208,62 @@ public:
         this->name = name;
     }
     NodeWrapper(PerspectiveSpace &space, const std::string & name) : NodeWrapper(name) {
-        node = space;
+        node.set(space);
         _is_space = true;
         _is_grouping = true;
     }
     NodeWrapper(Plane &plane, const std::string & name) : NodeWrapper(name) {
-        node = plane;
+        node.set(plane);
         _is_plane = true;
     }
     NodeWrapper(VanishingPoint &vp, const std::string & name) : NodeWrapper(name) {
-        node = vp;
+        node.set(vp);
         _is_vanishing_point = true;
         _is_point = true;
         _is_UI = true;
     }
     NodeWrapper(RectilinearProjection &projection, const std::string & name) : NodeWrapper(name) {
-        node = projection;
+        node.set(projection);
         _is_view = true;
         _is_projection = true;
         _is_rectilinear = true;
         _is_grouping = true;
     }
     NodeWrapper(CurvilinearPerspective &projection, const std::string & name) : NodeWrapper(name) {
-        node = projection;
+        node.set(projection);
         _is_view = true;
         _is_projection = true;
         _is_curvilinear = true;
         _is_grouping = true;
     }
     NodeWrapper(PerspectiveGroup &group, const std::string & name) : NodeWrapper(name) {
-        node = group;
+        node.set(group);
         _is_group = true;
         _is_UI = true;
         _is_grouping = true;
         _is_UI_only = true;
     }
     PerspectiveSpace & as_space() {
-        return std::get<PerspectiveSpace>(node);
+        return node.get<PerspectiveSpace>();
     }
     Plane & as_plane() {
-        return std::get<Plane>(node);
+        return node.get<Plane>();
     }
     VanishingPoint & as_vanishingPoint() {
-        return std::get<VanishingPoint>(node);
+        return node.get<VanishingPoint>();
     }
     BaseProjection * as_projection() {
-        if (auto projection = std::get_if<RectilinearProjection>(&node)) {
-            return projection;
+        if (node.is(NodeVariant::NODE_TYPE::RECTILINEAR_PROJECTION)) {
+            return &node.get<RectilinearProjection>();
         } else {
-            return &std::get<CurvilinearPerspective>(node);
+            return &node.get<CurvilinearPerspective>();
         }
     }
     PerspectiveGroup & as_group() {
-        return std::get<PerspectiveGroup>(node);
+        return node.get<PerspectiveGroup>();
     }
     Complex get_position() {
-        return std::get<VanishingPoint>(node).get_position();
+        return node.get<VanishingPoint>().get_position();
     }
     /** Update perspective space using change in its node position */
     void update_space(const VanishingPoint & child_node, const Quaternion & new_dir) {
@@ -179,7 +277,9 @@ public:
     }
     void update_child(NodeWrapper * child_node) {
         if (!child_node->_is_plane) {
-            as_projection()->update_child(child_node->as_vanishingPoint());
+            auto & vp = child_node->as_vanishingPoint();
+            auto p = as_projection();
+            p->update_child(vp);
         }
     }
     void update_child_dir(NodeWrapper * child_node) {
@@ -197,6 +297,9 @@ public:
             .relation = relation,
         });
     }
+    const std::vector<NodeWrapper::RelationItem> & get_relations() {
+        return _relations;
+    }
     void remove_child(NodeWrapper * child) {
         for (auto it = _children.begin(); it != _children.end();) {
             if (*it == child) {
@@ -207,12 +310,9 @@ public:
             }
         }
     }
-    // TODO DRY
+
     void add_parent(NodeWrapper * parent) {
-        _relations.push_back(RelationItem{
-            .node = parent,
-            .relation = NodeRelation::PARENT,
-        });
+        add_relative(parent, NodeRelation::PARENT);
     }
     void set_parent(NodeWrapper * parent) {
         for (auto it = _relations.begin(); it != _relations.end();) {
@@ -223,29 +323,23 @@ public:
         }
         add_relative(parent, NodeRelation::PARENT);
     }
+    NodeWrapper * get_first_relation_of_type(NodeRelation relation) {
+        for (auto && item : _relations) {
+            if (item.relation == relation) {
+                return item.node;
+            }
+        }
+        return nullptr;
+    }
     NodeWrapper * get_parent() {
-        for (auto && item : _relations) {
-            if (item.relation == NodeRelation::PARENT) {
-                return item.node;
-            }
-        }
-        return nullptr;
+        return get_first_relation_of_type(NodeRelation::PARENT);
     }
-    // TODO DRY
+
     void add_view(NodeWrapper * view) {
-        _relations.push_back(RelationItem{
-            .node = view,
-            .relation = NodeRelation::VIEW,
-        });
+        add_relative(view, NodeRelation::VIEW);
     }
-    // TODO DRY
     NodeWrapper * get_view() {
-        for (auto && item : _relations) {
-            if (item.relation == NodeRelation::VIEW) {
-                return item.node;
-            }
-        }
-        return nullptr;
+        return get_first_relation_of_type(NodeRelation::VIEW);
     }
     std::vector<NodeWrapper*> get_compute_children() {
         std::vector<NodeWrapper*> result;
@@ -256,13 +350,14 @@ public:
         }
         return result;
     }
-    std::string get_angles_str() {
+    std::string get_description() {
         if (!is_vanishing_point()) {
             return "";
         } else {
             auto angles = vector_to_angle(as_vanishingPoint().get_direction());
+            auto focalLenth = vector_to_lens_mm(as_vanishingPoint().get_direction());
             // TODO move to python
-            return std::to_string(angles.first) + "°, " + std::to_string(angles.second) + "°";
+            return std::to_string(angles.first * (180.0/M_PI)) + "°, " + std::to_string(angles.second * (180.0/M_PI)) + "°, " + std::to_string(focalLenth) + "mm";
         }
     }
     PerspectiveLine * get_line(Complex origin) {
@@ -441,7 +536,7 @@ public:
         } else if (name == "space_2p_rect") {
             return &NodeWrapper::compute_space_2p_rect;
         } else {
-            // TODO exception
+            throw std::runtime_error("unknown compute function");
         }
         return nullptr;
     }
@@ -525,7 +620,6 @@ public:
     }
 };
 
-
 struct VisualizationData {
     std::string type;
     std::vector<int> nodes;
@@ -538,7 +632,6 @@ private:
     std::map<std::string, NodeWrapper*> tags;
     std::vector<std::shared_ptr<NodeWrapper>> nodes;
     std::vector<VisualizationData> visualizations;
-    friend PyObject * to_object(GraphBase *);
 public:
     NodeWrapper * _root = nullptr;
     NodeWrapper * main_view = nullptr;
@@ -559,6 +652,8 @@ private:
         nodes.push_back(rootPtr);
         _root = rootPtr.get();
     }
+protected:
+    RawGraph to_raw_data();
 public:
     GraphBase() {
         clear();
@@ -583,14 +678,14 @@ public:
     NodeWrapper * connect_sub_graph(NodeWrapper * localRoot);
 
     /** create sub graph from data and attach it as child of currently selected element */
-    NodeWrapper * add_sub_graph(PyObject * data) {
+    NodeWrapper * add_sub_graph(RawGraph & data) {
         NodeWrapper * localRoot = create_from_structure(data);
         connect_sub_graph(localRoot);
         return localRoot;
     }
     
     /** initialize graph from data */
-    void initialize_from_structure(PyObject * data) {
+    void initialize_from_structure(RawGraph & data) {
         NodeWrapper * localRoot = create_from_structure(data);
         _root = localRoot;
         std::vector<NodeWrapper *> computeNodes;
@@ -602,8 +697,8 @@ public:
             computeNode->compute(this);
         }
     }
-
-    NodeWrapper * create_from_structure(PyObject * data);
+    
+    NodeWrapper * create_from_structure(RawGraph & data);
     
     NodeWrapper * get_by_tag(const std::string & tag) {
         if (tags.count(tag)) {
@@ -624,6 +719,19 @@ public:
     NodeWrapper * remove_by_uid(int uid) {
         NodeWrapper * node = get_by_uid(uid);
         nodeMap.erase(uid);
+        for (auto vis = visualizations.begin(); vis != visualizations.end();) {
+            bool erased = false;
+            for (auto && nodeid : vis->nodes) {
+                if (nodeid == uid) {
+                    vis = visualizations.erase(vis);
+                    erased = true;
+                    break;
+                }
+            }
+            if (!erased) {
+                ++vis;
+            }
+        }
         if (node) {
             NodeWrapper * parent = node->get_parent();
             if (parent) {
@@ -655,22 +763,7 @@ public:
         }
         return nullptr;
     }
-
-    // TODO unused?
-    // TODO DRY
-    NodeWrapper * find_parent_view(NodeWrapper * node) {
-        NodeWrapper * parent = node->get_parent();
-        while (parent != nullptr) {
-            if (parent->is_view()) {
-                return parent;
-            } else {
-                parent = parent->get_parent();
-            }
-        }
-        return nullptr;
-    }
     
-    // TODO DRY
     NodeWrapper * find_UI_parent(NodeWrapper * node) {
         NodeWrapper * parent = node->get_parent();
         while (parent != nullptr) {

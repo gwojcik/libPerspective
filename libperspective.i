@@ -7,6 +7,7 @@
 #include "Helpers.h"
 #include "Space.h"
 #include "Graph.h"
+#include "PythonGraph.h"
 %}
 
 %begin %{
@@ -19,12 +20,17 @@
 %include "std_vector.i"
 %include "std_string.i"
 
+%ignore NodeVariant;
+%ignore raw_data_to_python;
+%ignore python_to_raw_data;
+
 %include "Quaternion.h"
 %include "Point.h"
 %include "Projection.h"
 %include "Helpers.h"
 %include "Space.h"
 %include "Graph.h"
+%include "PythonGraph.h"
 
 %template(ComplexVector) std::vector<Complex>;
 %template(QuaternionVector) std::vector<Quaternion>;

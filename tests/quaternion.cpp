@@ -51,11 +51,38 @@ TEST_CASE ( "Quaternion math" )
     }
     SECTION ( "scalar multiplication" ) {
         constexpr auto q1 = Quaternion{1,2,3,4};
-        constexpr auto r = q1 * 3;
-        REQUIRE ( r.x == 3.0 );
-        REQUIRE ( r.y == 6.0 );
-        REQUIRE ( r.z == 9.0 );
-        REQUIRE ( r.w == 12.0 );
+        SECTION("operator *") {
+            constexpr auto r = q1 * 3;
+            REQUIRE ( r.x == 3.0 );
+            REQUIRE ( r.y == 6.0 );
+            REQUIRE ( r.z == 9.0 );
+            REQUIRE ( r.w == 12.0 );
+        }
+        SECTION("method 'scalar_mul'") {
+            constexpr auto r = q1.scalar_mul(3);
+            REQUIRE ( r.x == 3.0 );
+            REQUIRE ( r.y == 6.0 );
+            REQUIRE ( r.z == 9.0 );
+            REQUIRE ( r.w == 12.0 );
+        }
+    }
+    SECTION ( "operator +" ) {
+        constexpr auto q1 = Quaternion{1,2,3,4};
+        constexpr auto q2 = Quaternion{-1,2,10,-14};
+        constexpr auto r = q1 + q2;
+        REQUIRE ( r.x == 0.0 );
+        REQUIRE ( r.y == 4.0 );
+        REQUIRE ( r.z == 13.0 );
+        REQUIRE ( r.w == -10.0 );
+    }
+    SECTION ( "operator -" ) {
+        constexpr auto q1 = Quaternion{1,2,3,4};
+        constexpr auto q2 = Quaternion{-1,2,10,-14};
+        constexpr auto r = q1 - q2;
+        REQUIRE ( r.x == 2.0 );
+        REQUIRE ( r.y == 0.0 );
+        REQUIRE ( r.z == -7.0 );
+        REQUIRE ( r.w == 18.0 );
     }
     SECTION ( "conjugate" ) {
         constexpr auto q1 = Quaternion{1,2,3,4};

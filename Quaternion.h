@@ -20,12 +20,6 @@
 #include <sstream>
 #include <complex>
 
-#if __GNUC__ >= 8
-#define MATH_CONSTEXPR constexpr
-#else
-#define MATH_CONSTEXPR
-#endif
-
 using precission = double;
 using Complex = std::complex<precission>;
 
@@ -46,7 +40,6 @@ public:
             - this->x * q.x - this->y * q.y - this->z * q.z + this->w * q.w
         };
     }
-    // TODO rm?
     constexpr Quaternion operator*(precission scale) const {
         return Quaternion{
             this->x * scale,
@@ -55,7 +48,6 @@ public:
             this->w * scale,
         };
     }
-    // TODO tests, rename, rm?
     constexpr Quaternion scalar_mul(precission scale) const {
         return Quaternion{
             this->x * scale,
@@ -64,7 +56,6 @@ public:
             this->w * scale,
         };
     }
-    // TODO tests
     constexpr Quaternion operator+(const Quaternion & q) const {
         return Quaternion{
             this->x + q.x,
@@ -73,7 +64,6 @@ public:
             this->w + q.w,
         };
     }
-    // TODO tests
     constexpr Quaternion operator-(const Quaternion & q) const {
         return Quaternion{
             this->x - q.x,
@@ -96,13 +86,16 @@ public:
         sprintf(tmp, "Q(%g, %g, %g, %g)", x, y, z, w);
         return tmp;
     }
+    static constexpr Quaternion FORWARD() {
+        return {0, 0, 1, 0};
+    }
 };
 
-MATH_CONSTEXPR precission length(const Quaternion & q) {
+inline precission length(const Quaternion & q) {
     return std::hypot(std::hypot(q.x, q.y), q.z);
 }
 
-MATH_CONSTEXPR Quaternion normalize(const Quaternion & q) {
+inline Quaternion normalize(const Quaternion & q) {
     precission len = length(q);
     return {
         q.x/len,
@@ -133,7 +126,7 @@ constexpr precission dot(const Quaternion & a, const Quaternion & b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-MATH_CONSTEXPR Quaternion rotationBetwenVectors(const Quaternion & a, const Quaternion & b) {
+inline Quaternion rotationBetwenVectors(const Quaternion & a, const Quaternion & b) {
     auto normalizedA = normalize(a);
     auto normalizedB = normalize(b);
     auto halfVector = normalize(Quaternion(
@@ -153,7 +146,7 @@ MATH_CONSTEXPR Quaternion rotationBetwenVectors(const Quaternion & a, const Quat
 }
 
 // TODO tests
-MATH_CONSTEXPR Quaternion createRotationQuatenion(const Quaternion & normal, precission angle) {
+inline Quaternion createRotationQuatenion(const Quaternion & normal, precission angle) {
     precission sin = std::sin(angle/2.0f);
     precission cos = std::cos(angle/2.0f);
     return Quaternion (
@@ -163,5 +156,3 @@ MATH_CONSTEXPR Quaternion createRotationQuatenion(const Quaternion & normal, pre
         cos
     );
 }
-
-#undef MATH_CONSTEXPR

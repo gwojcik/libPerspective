@@ -49,7 +49,7 @@ inline std::vector<Quaternion> create_circle(const Quaternion & center, const Qu
     Quaternion pos = start - center;
     std::vector<Quaternion> circle;
     circle.push_back(pos + center);
-    Quaternion forward(0, 0, 1, 0);
+    Quaternion forward = Quaternion::FORWARD();
     for (int i = 0; i < side_count; i++) {
         pos = rotate(rotation, pos);
         Quaternion edge_pos = pos + center;
