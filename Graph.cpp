@@ -37,7 +37,7 @@ namespace {
         }
         return result;
     }
-    
+
     std::string nodeRelationToString(NodeRelation relation) {
         std::string result;
         switch (relation) {
@@ -68,6 +68,11 @@ namespace {
         PyObject * type = PyObject_Type(obj);
         PyObject * typeStr = PyObject_Str(type);
         return std::string(PyString_AsString(typeStr));
+    }
+
+    std::string python_to_string(PyObject * obj) {
+        PyObject * objStr = PyObject_Str(obj);
+        return std::string(PyString_AsString(objStr));
     }
 
     class QuaternionAsVector3 : public Quaternion {
@@ -157,7 +162,7 @@ namespace {
     };
 
     struct pyDictReader;
-    
+
     struct pyListReader {
     private:
         PyObject * list;
@@ -240,6 +245,9 @@ namespace {
             PyObject * str = PyObject_Str(item);
             return std::string(PyString_AsString(str));
         }
+        PyObject * get_object() const {
+            return dict;
+        }
     private:
         PyObject * getItem(const std::string & key) {
             auto pyKey = PyString_FromStringAndSize(key.data(), key.size());
@@ -292,15 +300,18 @@ namespace {
     template<> Quaternion pyDictReader::get(const std::string& key){
         PyObject * item = getItem(key);
         auto getItem = PyList_GetItem;
+        auto getSize = PyList_Size;
         if (PyList_Check(item)) {
             getItem = PyList_GetItem;
+            getSize = PyList_Size;
         } else if (PyTuple_Check(item)) {
             getItem = PyTuple_GetItem;
+            getSize = PyTuple_Size;
         } else {
             std::cout << "bad type: expected tuple or list (quaternion) for dict key " << key << "\n";
             std::cout << " \tget type: " << python_type_string(item) << "\n";
         }
-        auto size = PyList_Size(item);
+        auto size = getSize(item);
         if (size == 3) {
             return Quaternion (
                 PyFloat_AsDouble(getItem(item, 0)),
@@ -319,7 +330,7 @@ namespace {
             return Quaternion();
         }
     }
-    
+
     pyDictReader pyListReader::getDict(int id){
         return pyDictReader(getItem(id));
     }
@@ -330,7 +341,7 @@ namespace {
             fct(dictReader.getDict(i));
         }
     }
-    
+
     struct TraverseItem {
         NodeWrapper* parent;
         NodeWrapper* node;
@@ -401,7 +412,7 @@ namespace {
             std::cout << "missing local rotation for perspective space\n";
             std::exit(1);
         }
-        
+
         if (reader.has("up")) {
             Quaternion up = reader.get<Quaternion>("up");
             Quaternion defaultUp = Quaternion(0, 1, 0);
@@ -478,17 +489,17 @@ namespace {
 
         pyDictReader reader = pyDictReader(nodeData);
         std::string type = reader.as_string("type");
-        
+
         if (reader.has("is_UI")) {
             node->set_UI(reader.get<int>("is_UI"));
         }
-        
+
         if (reader.has("enabled")) {
             node->enabled = reader.get<bool>("enabled");
         } else {
             node->enabled = true;
         }
-        
+
         if (reader.has("parent_enabled")) {
             node->parent_enabled = reader.get<bool>("enabled");
         } else {
@@ -506,7 +517,7 @@ namespace {
         } else {
             node->parent_locked = false;
         }
-        
+
         if (reader.has("is_compute")) {
             bool is_compute = reader.get<bool>("is_compute");
             node->set_compute(is_compute);
@@ -523,7 +534,7 @@ namespace {
         } else {
             node->set_compute(false);
         }
-        
+
         if (type == "VP") {
             if (reader.has("role")) {
                 std::string role = reader.as_string("role");
@@ -536,14 +547,14 @@ namespace {
                     std::exit(1); // TODO exception
                 }
             }
-            
+
             if (reader.has("color")) {
                 node->color = reader.get<int>("color");
             }
         }
 
-        return node; 
-    }   
+        return node;
+    }
 }
 
 int NodeWrapper::getNextUID(){
@@ -704,7 +715,7 @@ void GraphBase::update(NodeWrapper* node, Complex pos) {
             computeNodes.push(toCompute);
         }
     }
-    
+
     while (!computeNodes.empty()) {
         NodeWrapper * computeNode = computeNodes.top();
         computeNodes.pop();
@@ -746,23 +757,23 @@ GraphBase::NewElementData GraphBase::get_group_for_new_element(){
 /** connect sub graph with root in local_rot as child of currently selected element */
 NodeWrapper * GraphBase::connect_sub_graph(NodeWrapper* localRoot){
     auto data = get_group_for_new_element();
-    
+
     if (localRoot->is_point()) {
         data.view->update_child(localRoot, localRoot->get_position());
         if (data.space != nullptr) {
             data.space->as_space().move_child_to_space(localRoot->as_vanishingPoint());
         }
     }
-    
+
     if (localRoot->is_space()) {
         if (data.space != nullptr) {
             data.space->as_space().move_subspace_to_space(localRoot->as_space());
         }
     }
-    
+
     data.group->add_child(localRoot);
     localRoot->add_parent(data.group);
-    
+
     std::stack<NodeWrapper*> nodes;
     nodes.push(localRoot);
     while (!nodes.empty()) {
@@ -823,11 +834,11 @@ PyObject * to_object(GraphBase* graph) {
             writer("compute_params", params.result());
             writer("compute_fct", node->compute_function_name);
         }
-        
+
         if (tagMap.count(node->uid)) {
             writer("tag", tagMap[node->uid]);
         }
-        
+
         if (node->_is_group) {
             writer("type", "Group");
         } else if (node->is_point()) {
@@ -867,7 +878,7 @@ PyObject * to_object(GraphBase* graph) {
         visualizationData("nodes", visNodes.result());
         visualizations(visualizationData.result());
     }
-    
+
     pyDictWriter result;
     result("nodes", nodes.result());
     result("edges", edges.result());
@@ -893,7 +904,7 @@ NodeWrapper * GraphBase::create_from_structure(PyObject* data){
         std::cout << "bad structure\n";
         std::exit(1); // TODO exception
     }
-    
+
     std::string root = allData.as_string("root");
 
     pyListReader nodes = allData.getList("nodes");
@@ -909,7 +920,7 @@ NodeWrapper * GraphBase::create_from_structure(PyObject* data){
             std::string tag = nodeData.as_string("tag");
             this->tags[tag] = node.get();
         }
-        
+
         std::string type = nodeData.as_string("type");
         if ((type == "RectilinearProjection" || type == "CurvilinearPerspective") && this->main_view == nullptr) {
             this->main_view = node.get();
@@ -921,7 +932,7 @@ NodeWrapper * GraphBase::create_from_structure(PyObject* data){
         if (!edgeData.has("src") || !edgeData.has("dst")) {
             std::cout << "edge format is incorrect\n";
             std::exit(1);
-        } 
+        }
         std::string src = edgeData.as_string("src");
         std::string dst = edgeData.as_string("dst");
         std::string edgeType = "CHILD";
@@ -930,7 +941,7 @@ NodeWrapper * GraphBase::create_from_structure(PyObject* data){
         }
         add_edge( get_by_uid(idMap[dst]), get_by_uid(idMap[src]), edgeType );
     });
-    
+
     if (allData.has("visualizations")) {
         pyListReader visualizations = allData.getList("visualizations");
         forEachDict(visualizations, [&idMap, this](pyDictReader visualizationData) {
@@ -944,6 +955,6 @@ NodeWrapper * GraphBase::create_from_structure(PyObject* data){
             this->visualizations.push_back(visualization);
         });
     }
-    
+
     return get_by_uid(idMap[root]);
 }
