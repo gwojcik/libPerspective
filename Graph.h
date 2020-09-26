@@ -110,13 +110,14 @@ struct NodeVariant {
         node.perspectiveGroup = group;
         nodeType = NODE_TYPE::PERSPECTIVE_GROUP;
     }
-    bool is(NODE_TYPE type ) {
+    bool is(NODE_TYPE type ) const {
         return nodeType == type;
     }
     template<typename T> T & get() = delete;
+    template<typename T> const T & get() const = delete;
 };
 
-template<> inline PerspectiveSpace & NodeVariant::get<PerspectiveSpace>() {
+template<> inline const PerspectiveSpace & NodeVariant::get<PerspectiveSpace>() const {
     if (nodeType == NODE_TYPE::PERSPECTIVE_SPACE) {
         return *node.perspectiveSpace;
     } else {
@@ -124,7 +125,7 @@ template<> inline PerspectiveSpace & NodeVariant::get<PerspectiveSpace>() {
     }
 }
 
-template<> inline Plane & NodeVariant::get<Plane>() {
+template<> inline const Plane & NodeVariant::get<Plane>() const {
     if (nodeType == NODE_TYPE::PLANE) {
         return node.plane;
     } else {
@@ -132,7 +133,7 @@ template<> inline Plane & NodeVariant::get<Plane>() {
     }
 }
 
-template<> inline VanishingPoint & NodeVariant::get<VanishingPoint>() {
+template<> inline const VanishingPoint & NodeVariant::get<VanishingPoint>() const {
     if (nodeType == NODE_TYPE::VANISHING_POINT) {
         return *node.vanishingPoint;
     } else {
@@ -140,7 +141,11 @@ template<> inline VanishingPoint & NodeVariant::get<VanishingPoint>() {
     }
 }
 
-template<> inline RectilinearProjection & NodeVariant::get<RectilinearProjection>() {
+template<> inline VanishingPoint & NodeVariant::get<VanishingPoint>() {
+    return const_cast<VanishingPoint &>(static_cast<const NodeVariant &>(*this).get<VanishingPoint>());
+}
+
+template<> inline const RectilinearProjection & NodeVariant::get<RectilinearProjection>() const {
     if (nodeType == NODE_TYPE::RECTILINEAR_PROJECTION) {
         return *node.rectilinearProjection;
     } else {
@@ -148,7 +153,11 @@ template<> inline RectilinearProjection & NodeVariant::get<RectilinearProjection
     }
 }
 
-template<> inline CurvilinearPerspective & NodeVariant::get<CurvilinearPerspective>() {
+template<> inline RectilinearProjection & NodeVariant::get<RectilinearProjection>() {
+    return const_cast<RectilinearProjection &>(static_cast<const NodeVariant &>(*this).get<RectilinearProjection>());
+}
+
+template<> inline const CurvilinearPerspective & NodeVariant::get<CurvilinearPerspective>() const {
     if (nodeType == NODE_TYPE::CURVILINEAR_PERSPECTIVE) {
         return *node.curvilinearPerspective;
     } else {
@@ -156,12 +165,20 @@ template<> inline CurvilinearPerspective & NodeVariant::get<CurvilinearPerspecti
     }
 }
 
-template<> inline PerspectiveGroup & NodeVariant::get<PerspectiveGroup>() {
+template<> inline CurvilinearPerspective & NodeVariant::get<CurvilinearPerspective>() {
+    return const_cast<CurvilinearPerspective &>(static_cast<const NodeVariant &>(*this).get<CurvilinearPerspective>());
+}
+
+template<> inline const PerspectiveGroup & NodeVariant::get<PerspectiveGroup>() const {
     if (nodeType == NODE_TYPE::PERSPECTIVE_GROUP) {
         return node.perspectiveGroup;
     } else {
         throw std::runtime_error("unknown node variant");
     }
+}
+
+template<> inline PerspectiveGroup & NodeVariant::get<PerspectiveGroup>() {
+    return const_cast<PerspectiveGroup &>(static_cast<const NodeVariant &>(*this).get<PerspectiveGroup>());
 }
 
 class NodeWrapper {
@@ -243,27 +260,39 @@ public:
         _is_grouping = true;
         _is_UI_only = true;
     }
-    PerspectiveSpace & as_space() {
+    const PerspectiveSpace & as_space() const {
         return node.get<PerspectiveSpace>();
     }
-    Plane & as_plane() {
+    PerspectiveSpace & as_space() {
+        return const_cast<PerspectiveSpace &>(static_cast<const NodeWrapper &>(*this).as_space());
+    }
+    const Plane & as_plane() const {
         return node.get<Plane>();
     }
-    VanishingPoint & as_vanishingPoint() {
+    Plane & as_plane() {
+        return const_cast<Plane &>(static_cast<const NodeWrapper &>(*this).as_plane());
+    }
+    const VanishingPoint & as_vanishingPoint() const {
         return node.get<VanishingPoint>();
     }
-    BaseProjection * as_projection() {
+    VanishingPoint & as_vanishingPoint() {
+        return const_cast<VanishingPoint &>(static_cast<const NodeWrapper &>(*this).as_vanishingPoint());
+    }
+    const BaseProjection * as_projection() const {
         if (node.is(NodeVariant::NODE_TYPE::RECTILINEAR_PROJECTION)) {
             return &node.get<RectilinearProjection>();
         } else {
             return &node.get<CurvilinearPerspective>();
         }
     }
+    BaseProjection * as_projection() {
+        return const_cast<BaseProjection *>(static_cast<const NodeWrapper &>(*this).as_projection());
+    }
     PerspectiveGroup & as_group() {
         return node.get<PerspectiveGroup>();
     }
     Complex get_position() {
-        return node.get<VanishingPoint>().get_position();
+        return as_vanishingPoint().get_position();
     }
     /** Update perspective space using change in its node position */
     void update_space(const VanishingPoint & child_node, const Quaternion & new_dir) {
@@ -288,6 +317,9 @@ public:
     void add_child(NodeWrapper * child){
         _children.push_back(child);
     }
+    const std::vector<NodeWrapper*> & get_children() const {
+        return _children;
+    }
     std::vector<NodeWrapper*> & get_children() {
         return _children;
     }
@@ -297,7 +329,7 @@ public:
             .relation = relation,
         });
     }
-    const std::vector<NodeWrapper::RelationItem> & get_relations() {
+    const std::vector<NodeWrapper::RelationItem> & get_relations() const {
         return _relations;
     }
     void remove_child(NodeWrapper * child) {
@@ -573,34 +605,34 @@ public:
             parent_locked = parent->locked || parent->parent_locked;
         }
     }
-    bool is_point() {
+    bool is_point() const {
         return _is_point;
     }
-    bool is_vanishing_point() {
+    bool is_vanishing_point() const {
         return _is_vanishing_point;
     }
-    bool is_UI() {
+    bool is_UI() const {
         return _is_UI;
     }
     void set_UI(bool value) {
         _is_UI = value;
     }
-    bool is_UI_only() {
+    bool is_UI_only() const {
         return _is_UI_only;
     }
-    bool is_space() {
+    bool is_space() const {
         return _is_space;
     }
-    bool is_view() {
+    bool is_view() const {
         return _is_view;
     }
-    bool is_projection() {
+    bool is_projection() const {
         return _is_projection;
     }
-    bool is_grouping() {
+    bool is_grouping() const {
         return _is_grouping;
     }
-    bool is_compute() {
+    bool is_compute() const {
         return isCompute;
     }
     void set_compute(bool compute) {
@@ -653,7 +685,7 @@ private:
         _root = rootPtr.get();
     }
 protected:
-    RawGraph to_raw_data();
+    RawGraph to_raw_data() const;
 public:
     GraphBase() {
         clear();
@@ -670,8 +702,12 @@ public:
         visualizations.clear();
         createRoot();
     }
-    
+
     NodeWrapper * get_root() {
+        return _root;
+    }
+    
+    const NodeWrapper * get_root() const {
         return _root;
     }
     
@@ -746,7 +782,7 @@ public:
     
     std::vector<NodeWrapper *> get_all_enabled_points(bool skipLocked = false);
     
-    std::vector<NodeWrapper *> get_all_nodes(NodeWrapper * parent);
+    std::vector<const NodeWrapper *> get_all_nodes(NodeWrapper * parent);
     
     std::vector<VisualizationData> get_visualizations() {
         return visualizations;
@@ -794,7 +830,7 @@ public:
         dst->compute(this);
     }
 
-    bool is_empty() {
+    bool is_empty() const {
         return _is_empty;
     }
 };

@@ -28,9 +28,9 @@ protected:
 public:
     BasePoint() = default;
     explicit BasePoint(const Complex & position){
-        this->position = position; 
+        this->position = position;
     }
-    Complex get_position() {
+    constexpr Complex get_position() const {
         return position;
     }
     void set_position(const Complex & position) {
@@ -59,11 +59,11 @@ public:
     Quaternion get_direction() const {
         return this->direction;
     }
-    
+
     void set_direction(const Quaternion & dir) {
         this->direction = dir;
     }
-    
+
     Quaternion get_direction_local() const {
         return this->dir_local;
     }

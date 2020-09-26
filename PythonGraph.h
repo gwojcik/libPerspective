@@ -41,7 +41,7 @@ public:
         RawGraph rawGraph = python_to_raw_data(data);
         GraphBase::initialize_from_structure(rawGraph);
     }
-    PyObject * to_object() {
+    PyObject * to_object() const {
         RawGraph graph = GraphBase::to_raw_data();
         return raw_data_to_python(graph);
     }

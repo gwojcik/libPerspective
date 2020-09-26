@@ -309,7 +309,7 @@ namespace {
         void operator()(precission value) {
             PyList_Append(list, PyFloat_FromDouble(value));
         }
-        void operator()(std::string value) {
+        void operator()(const std::string & value) {
             PyList_Append(list, PyUnicode_FromString(value.c_str()));
         }
         PyObject * result() {

@@ -47,7 +47,7 @@ public:
     virtual ~Projection(){}
     virtual void update_child(VanishingPoint & vp) = 0;
     virtual void update_child(VanishingPoint & vp, const Complex & new_position) = 0;
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) = 0;
+    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const = 0;
 };
 
 
@@ -78,7 +78,7 @@ public:
     }
 
     /** return center */
-    Complex get_center_complex() {
+    Complex get_center_complex() const {
         return this->center;
     }
 
@@ -86,24 +86,24 @@ public:
         this->center = center;
     }
 
-    precission get_size() {
+    precission get_size() const {
         return this->size;
     }
-    
+
     void set_size(precission size) {
         this->size = size;
     }
 
     /** return 2D rotaion around center */
-    Complex get_rotation() {
+    Complex get_rotation() const {
         return this->rotation;
     }
-    
+
     void set_rotation(Complex rotation) {
         this->rotation = rotation;
     }
 
-    Complex internal_position_to_model(const Complex & pos) {
+    Complex internal_position_to_model(const Complex & pos) const {
         return pos * rotation * size + center;
     }
 
@@ -116,21 +116,21 @@ public:
         vp.set_position(new_position);
     }
 
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) = 0;
+    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const = 0;
 
-    virtual Quaternion calc_direction(const Complex & pos) = 0;
+    virtual Quaternion calc_direction(const Complex & pos) const = 0;
 
-    virtual Complex calc_pos_from_dir(const Quaternion & direction) = 0;
+    virtual Complex calc_pos_from_dir(const Quaternion & direction) const = 0;
 
-    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) = 0;
-    
-    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) = 0;
-    
-    /** 
+    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) const = 0;
+
+    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) const = 0;
+
+    /**
      * convert position in model (pixel based) to internal space
      *  internal space is transformed with center, size and rotation properties
      */
-    Complex model_position_to_internal(const Complex & position) {
+    Complex model_position_to_internal(const Complex & position) const {
         return ((position - center) / size * std::conj(rotation));
     }
 };
@@ -146,7 +146,7 @@ public:
     RectilinearProjection(const Complex & left_pos, const Complex & right_pos) : BaseProjection(left_pos, right_pos) {}
 
     /** convert 2D model position to 3D direction vector */
-    virtual Quaternion calc_direction(const Complex & model_pos) override {
+    virtual Quaternion calc_direction(const Complex & model_pos) const override {
         Complex internal_pos = this->model_position_to_internal(model_pos);
         Quaternion view_ray = Quaternion(internal_pos.real(), internal_pos.imag(), 1, 0);
         view_ray = normalize(view_ray);
@@ -154,7 +154,7 @@ public:
     }
 
     /** Take vector part of Quaternion and project it on canvas. */
-    virtual Complex calc_pos_from_dir(const Quaternion & direction) override {
+    virtual Complex calc_pos_from_dir(const Quaternion & direction) const override {
         if (direction.z == 0) {
             return Complex(1024*1024*1024, 1024*1024*1024);
         }
@@ -162,7 +162,7 @@ public:
         return Complex(direction.x * scale, direction.y * scale) * rotation + center;
     }
 
-    Complex get_direction_2d(const VanishingPoint & vp, const Complex & start_position) {
+    Complex get_direction_2d(const VanishingPoint & vp, const Complex & start_position) const {
         Quaternion direction = vp.get_direction();
         Complex sp = start_position;
         sp -= center;
@@ -175,19 +175,19 @@ public:
     }
 
     // FIXME memory leak
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) override;
+    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const override;
 
     // FIXME memory leak
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) override;
+    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const override;
 
-    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) override {
+    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) const override {
         return ray.scalar_mul(1.0 / ray.z);
     }
 
     /**
      * @param position in view space
      */
-    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) override {
+    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) const override {
         std::vector<Complex> result;
         for( auto && pos : positions) {
             Quaternion intersection = this->intersect_view_ray_canvas(pos);
@@ -204,14 +204,14 @@ public:
 class CurvilinearPerspective : public BaseProjection {
 public:
     CurvilinearPerspective(const Complex & left_pos, const Complex & right_pos) : BaseProjection(left_pos, right_pos) {}
-    
-    virtual Complex calc_pos_from_dir(const Quaternion & direction) override {
+
+    virtual Complex calc_pos_from_dir(const Quaternion & direction) const override {
         Quaternion dirNormalized = normalize(direction);
         Complex internal_pos = Complex(dirNormalized.x, dirNormalized.y);
         return internal_position_to_model(internal_pos);
     }
 
-    virtual Quaternion calc_direction(const Complex & pos) override {
+    virtual Quaternion calc_direction(const Complex & pos) const override {
         Complex internal = model_position_to_internal(pos);
         precission r = std::hypot(internal.real(), internal.imag());
         if (r > 1.0) {
@@ -223,17 +223,17 @@ public:
     }
 
     // FIXME memory leak
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) override;
-    
+    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const override;
+
     // FIXME memory leak
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) override;
+    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const override;
 
     /** use view space */
-    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) override {
+    virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) const override {
         return ray;
     }
 
-    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) override {
+    virtual std::vector<Complex> project_on_canvas(const std::vector<Quaternion> & positions) const override {
         std::vector<Complex> result;
         for ( auto && pos : positions) {
             if (pos.z > 0) {

@@ -84,7 +84,7 @@ inline std::vector<Quaternion> teselate_poligon (const std::vector<Quaternion> &
  * Used equation: R * (-(S-O)·N)/(V·N))
  * where R - ray, S - start position, N - plane normal, O - offset
  */
-inline Quaternion intersect_view_ray_and_plane(const Quaternion & plane_normal, const Quaternion & offset, const Quaternion & ray) {
+constexpr Quaternion intersect_view_ray_and_plane(const Quaternion & plane_normal, const Quaternion & offset, const Quaternion & ray) {
     precission ray_length = plane_normal.dot_3D(offset) / ray.dot_3D(plane_normal);
     return ray.scalar_mul(ray_length);
 }
@@ -98,7 +98,7 @@ public:
     explicit Plane(const Quaternion & normal) : normal(normal) {};
 
     /** returns vector perpendicular to plane */
-    Quaternion get_normal() {
+    Quaternion get_normal() const {
         return normal;
     }
 

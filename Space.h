@@ -34,7 +34,7 @@ public:
     }
 
     /** projection done in not transformed view space */
-    Quaternion project_on_space_plane(const Quaternion & direction) {
+    Quaternion project_on_space_plane(const Quaternion & direction) const {
         Quaternion normalizedDir = normalize(direction);
 
         Quaternion up = Quaternion(0, 1, 0, 0);
@@ -68,31 +68,31 @@ public:
     }
 
     /** apply rotation on vanishing point */
-    void update_child_dir(VanishingPoint & vp) {
+    void update_child_dir(VanishingPoint & vp) const {
         vp.set_direction(rotate(rotation, vp.get_direction_local()));
     }
 
     /** apply local rotation on subspace */
-    void update_subspace(PerspectiveSpace & subspace) {
+    void update_subspace(PerspectiveSpace & subspace) const {
         subspace.rotation = rotation * subspace.rotation_local;
     }
 
-    void move_child_to_space(VanishingPoint & vp) {
+    void move_child_to_space(VanishingPoint & vp) const {
         Quaternion dir_global = vp.get_direction();
         vp.set_direction_local(
             rotate(rotation.conjugate(), dir_global)
         );
     }
 
-    void move_subspace_to_space(PerspectiveSpace & subspace) {
+    void move_subspace_to_space(PerspectiveSpace & subspace) const {
         Quaternion rotation_global = subspace.rotation;
         subspace.rotation_local = rotation.conjugate() * rotation_global;
     }
-    
+
     Quaternion get_rotation() const {
         return rotation;
     }
-    
+
     Quaternion get_rotation_local() const {
         return rotation_local;
     }

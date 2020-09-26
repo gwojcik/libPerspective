@@ -67,11 +67,11 @@ namespace {
     };
 
     struct TraverseItem {
-        NodeWrapper* parent;
-        NodeWrapper* node;
+        const NodeWrapper* parent;
+        const NodeWrapper* node;
     };
 
-    template<typename F> void forEachNode(NodeWrapper * firstNode, F fct) {
+    template<typename F> void forEachNode(const NodeWrapper * firstNode, F fct) {
         std::stack<TraverseItem> nodes;
         nodes.push(TraverseItem{
             .parent = nullptr,
@@ -321,9 +321,9 @@ std::vector<NodeWrapper *> GraphBase::get_all_enabled_points(bool skipLocked){
     return result;
 }
 
-std::vector<NodeWrapper *> GraphBase::get_all_nodes(NodeWrapper* parent){
-    std::vector<NodeWrapper*> result;
-    forEachNode(parent, [&result](NodeWrapper * node, NodeWrapper * parent){
+std::vector<const NodeWrapper *> GraphBase::get_all_nodes(NodeWrapper* parent){
+    std::vector<const NodeWrapper*> result;
+    forEachNode(parent, [&result](const NodeWrapper * node, const NodeWrapper * parent){
         (void) parent;
         result.push_back(node);
     });
@@ -486,13 +486,14 @@ NodeWrapper * GraphBase::connect_sub_graph(NodeWrapper* localRoot){
     return localRoot;
 }
 
-RawGraph GraphBase::to_raw_data() {
+RawGraph GraphBase::to_raw_data() const {
     std::map<int, std::string> tagMap;
     RawGraph result;
     for (auto && tag : tags) {
         tagMap[tag.second->uid] = tag.first;
     }
-    forEachNode(get_root(), [&result, &tagMap](NodeWrapper * node, NodeWrapper * parent){
+    // TODO const params
+    forEachNode(get_root(), [&result, &tagMap](const NodeWrapper * node, const NodeWrapper * parent){
         if (parent) {
             RawEdge childEdge;
             childEdge.src = std::to_string(parent->uid);

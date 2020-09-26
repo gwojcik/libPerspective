@@ -29,7 +29,7 @@ private:
         return Complex(-a.imag(), a.real());
     }
 public:
-    PerspectiveLineSimple(RectilinearProjection * projection, const VanishingPoint & vp, const Complex & start_position) {
+    PerspectiveLineSimple(const RectilinearProjection * projection, const VanishingPoint & vp, const Complex & start_position) {
         this->start_position = start_position;
         this->direction = projection->get_direction_2d(vp, start_position);
     }
@@ -57,9 +57,9 @@ class PerspectiveLineCurvilinear : public PerspectiveLine {
 private:
     Quaternion start_dir;
     Quaternion plane_normal;
-    CurvilinearPerspective * projection;
+    const CurvilinearPerspective * projection;
 public:
-    PerspectiveLineCurvilinear(CurvilinearPerspective * projection, const VanishingPoint & vp, const Complex & start_position) {
+    PerspectiveLineCurvilinear(const CurvilinearPerspective * projection, const VanishingPoint & vp, const Complex & start_position) {
         this->projection = projection;
         this->start_dir = projection->calc_direction(start_position);
         this->plane_normal = normalize(cross(start_dir, vp.get_direction()));
@@ -108,12 +108,12 @@ public:
 };
 class HorizonLineRectilinear : public HorizonLineBase {
 private:
-    BaseProjection * projection;
+    const BaseProjection * projection;
     Complex horizon_anchor_pos;
     Complex horizon_dir_2d;
     bool is_inf;
 public:
-    HorizonLineRectilinear(BaseProjection * projection, const Quaternion & up) {
+    HorizonLineRectilinear(const BaseProjection * projection, const Quaternion & up) {
         precission projected_len = std::hypot(up.x, up.y);
         this->projection = projection;
         if (projected_len == 0 || up.z == 0) {
@@ -150,7 +150,7 @@ public:
 };
 class HorizonLineCurvilinear : public HorizonLineBase {
 public:
-    HorizonLineCurvilinear(BaseProjection * projection, const Quaternion & up) {
+    HorizonLineCurvilinear(const BaseProjection * projection, const Quaternion & up) {
         (void) projection;
         (void) up;
         // TODO implement
@@ -165,18 +165,18 @@ public:
 };
 }
 
-PerspectiveLine * RectilinearProjection::get_line(const VanishingPoint& vp, const Complex& start_position) {
+PerspectiveLine * RectilinearProjection::get_line(const VanishingPoint& vp, const Complex& start_position) const {
     return new PerspectiveLineSimple(this, vp, start_position);
 }
 
-HorizonLineBase * RectilinearProjection::get_horizon_line(const Quaternion& up) {
+HorizonLineBase * RectilinearProjection::get_horizon_line(const Quaternion& up) const {
     return new HorizonLineRectilinear(this, up);
 }
 
-PerspectiveLine * CurvilinearPerspective::get_line(const VanishingPoint& vp, const Complex& start_position) {
+PerspectiveLine * CurvilinearPerspective::get_line(const VanishingPoint& vp, const Complex& start_position) const {
     return new PerspectiveLineCurvilinear(this, vp, start_position);
 }
 
-HorizonLineBase * CurvilinearPerspective::get_horizon_line(const Quaternion& up) {
+HorizonLineBase * CurvilinearPerspective::get_horizon_line(const Quaternion& up) const {
     return new HorizonLineCurvilinear(this, up);
 }
