@@ -1,5 +1,9 @@
 %module libperspective
 
+%include <std_shared_ptr.i>
+%shared_ptr(PerspectiveLine)
+%shared_ptr(HorizonLineBase)
+
 %{
 #include "Quaternion.h"
 #include "Point.h"
@@ -35,5 +39,6 @@
 %template(ComplexVector) std::vector<Complex>;
 %template(QuaternionVector) std::vector<Quaternion>;
 %template(NodeWrapperVector) std::vector<NodeWrapper*>;
-%template(VisualizationDataVector) std::vector<VisualizationData>;
+%template(VisualizationDataVector) std::vector<VisualizationData*>;
 %template(IntVector) std::vector<int>;
+%template(DoubleVector) std::vector<double>;

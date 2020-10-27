@@ -432,7 +432,15 @@ RawGraph python_to_raw_data(PyObject* data) {
             for (int i = 0; i < nodesSize; i++) {
                 rawVis.nodes.push_back(nodes.get_as_string(i));
             }
-            rawVisualization.push_back(rawVis);
+            if (visualizationData.has("data")) {
+                rawVis.data = std::make_unique<std::vector<precission>>();
+                pyListReader visData = visualizationData.getList("data");
+                int visDataSize = visData.getSize();
+                for (int i = 0; i < visDataSize; i++) {
+                    rawVis.data->push_back(visData.get<precission>(i));
+                }
+            }
+            rawVisualization.push_back(std::move(rawVis));
         });
     }
 
@@ -520,6 +528,13 @@ PyObject * raw_data_to_python(RawGraph& data) {
                 visNodes(node);
             }
             visualizationData("nodes", visNodes.result());
+            pyListWriter visData;
+            if (visualization.data) {
+                for (auto && data : *visualization.data) {
+                    visData(data);
+                }
+            }
+            visualizationData("data", visData.result());
             visualizations(visualizationData.result());
         }
     }

@@ -62,7 +62,7 @@ inline std::vector<Quaternion> create_circle(const Quaternion & center, const Qu
 }
 
 /** Divide sides of polygon, used for Curvilinear perspective */
-inline std::vector<Quaternion> teselate_poligon (const std::vector<Quaternion> & polygon, int teselation) {
+inline std::vector<Quaternion> teselate_edges (const std::vector<Quaternion> & polygon, int teselation) {
     std::vector<Quaternion> result;
     Quaternion start = polygon.back();
     result.push_back(start);
@@ -75,6 +75,11 @@ inline std::vector<Quaternion> teselate_poligon (const std::vector<Quaternion> &
         start = point;
     }
     return result;
+}
+
+// TODO rm, use teselate_edges
+inline std::vector<Quaternion> teselate_poligon (const std::vector<Quaternion> & polygon, int teselation) {
+    return teselate_edges(polygon, teselation);
 }
 
 // TODO check description

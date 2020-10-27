@@ -18,6 +18,8 @@
 #include <atomic>
 #include <iostream>
 #include <stack>
+#include <algorithm>
+#include <set>
 
 #include "Graph.h"
 #include "RawData.h"
@@ -67,11 +69,11 @@ namespace {
     };
 
     struct TraverseItem {
-        const NodeWrapper* parent;
-        const NodeWrapper* node;
+        NodeWrapper* parent;
+        NodeWrapper* node;
     };
 
-    template<typename F> void forEachNode(const NodeWrapper * firstNode, F fct) {
+    template<typename F> void forEachNode(NodeWrapper * firstNode, F fct) {
         std::stack<TraverseItem> nodes;
         nodes.push(TraverseItem{
             .parent = nullptr,
@@ -318,9 +320,9 @@ std::vector<NodeWrapper *> GraphBase::get_all_enabled_points(bool skipLocked){
     return result;
 }
 
-std::vector<const NodeWrapper *> GraphBase::get_all_nodes(NodeWrapper* parent){
-    std::vector<const NodeWrapper*> result;
-    forEachNode(parent, [&result](const NodeWrapper * node, const NodeWrapper * parent){
+std::vector<NodeWrapper *> GraphBase::get_all_nodes(NodeWrapper* parent){
+    std::vector<NodeWrapper*> result;
+    forEachNode(parent, [&result](NodeWrapper * node, const NodeWrapper * parent){
         (void) parent;
         result.push_back(node);
     });
@@ -389,8 +391,8 @@ void GraphBase::update(NodeWrapper* node, Complex pos) {
     if (node->is_key() && space != nullptr) {
         Quaternion newDir = view->as_projection()->calc_direction(pos);
         space->update_space(node->as_vanishingPoint(), newDir);
-        std::vector<NodeWrapper*> tmpCN = update_groups(space);
-        for (auto && tmp : tmpCN) {
+        std::vector<NodeWrapper*> tmpComputeNodes = update_groups(space);
+        for (auto && tmp : tmpComputeNodes ) {
             computeNodes.push(tmp);
         }
     } else {
@@ -483,14 +485,14 @@ NodeWrapper * GraphBase::connect_sub_graph(NodeWrapper* localRoot){
     return localRoot;
 }
 
-RawGraph GraphBase::to_raw_data() const {
+RawGraph GraphBase::to_raw_data() {
     std::map<int, std::string> tagMap;
     RawGraph result;
     for (auto && tag : tags) {
         tagMap[tag.second->uid] = tag.first;
     }
     // TODO const params
-    forEachNode(get_root(), [&result, &tagMap](const NodeWrapper * node, const NodeWrapper * parent){
+    forEachNode(get_root(), [&result, &tagMap](NodeWrapper * node, NodeWrapper * parent){
         if (parent) {
             RawEdge childEdge;
             childEdge.src = std::to_string(parent->uid);
@@ -553,15 +555,19 @@ RawGraph GraphBase::to_raw_data() const {
 
     if (this->visualizations.size()) {
         result.visualizations = std::make_unique<std::vector<RawVisualization>>();
-    }
 
-    for (auto && visualization : this->visualizations) {
-        RawVisualization visualizationData;
-        visualizationData.type = visualization.type;
-        for (auto && node : visualization.nodes) {
-            visualizationData.nodes.push_back(std::to_string(node));
+        for (auto && visualization : this->visualizations) {
+            RawVisualization visualizationData;
+            visualizationData.type = visualization.type;
+            for (auto && node : visualization.nodes) {
+                visualizationData.nodes.push_back(std::to_string(node));
+            }
+            visualizationData.data = std::make_unique<std::vector<precission>>();
+            for (auto && data : visualization.data) {
+                visualizationData.data->push_back(data);
+            }
+            result.visualizations->push_back(std::move(visualizationData));
         }
-        result.visualizations->push_back(visualizationData);
     }
 
     result.root =  std::to_string(get_root()->uid);
@@ -614,9 +620,48 @@ NodeWrapper * GraphBase::create_from_structure(RawGraph& data){
             for(auto && nodeId : rawVis.nodes) {
                 visualization.nodes.push_back(idMap[nodeId]);
             }
+            if (rawVis.data) {
+                for ( auto && value : *rawVis.data) {
+                    visualization.data.push_back(value);
+                }
+            }
             this->visualizations.push_back(visualization);
         }
     }
 
     return get_by_uid(idMap[root]);
 }
+
+NodeWrapper* GraphBase::remove_by_uid ( int uid ){
+    NodeWrapper * node = get_by_uid ( uid );
+    nodeMap.erase ( uid );
+    if ( !node ) {
+        return nullptr;
+    }
+    std::vector<NodeWrapper *> toRemove = get_all_nodes ( node );
+    std::set<int> toRemoveUids;
+    for (auto && nodeToRemove : toRemove) {
+        toRemoveUids.insert(nodeToRemove->uid);
+    }
+    
+    auto checkVisualizationForDelete = [&toRemoveUids](VisualizationData & vis){
+        for (auto && nodeId : vis.nodes) {
+            if (toRemoveUids.count(nodeId)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    visualizations.erase ( std::remove_if ( visualizations.begin(), visualizations.end(), checkVisualizationForDelete ),visualizations.end() );
+
+    // FIXME - TODO remove nodes from GraphBase.nodes
+    //              change return value to void,
+    //              rewrite refreshing canvas in myPaint (call ot redraw_points_graph)
+    NodeWrapper * parent = node->get_parent();
+    if ( parent ) {
+        parent->remove_child ( node );
+        return node;
+    }
+    return nullptr;
+}
+

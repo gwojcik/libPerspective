@@ -63,7 +63,7 @@ inline precission vector_to_lens_mm(const Quaternion & vector) {
     Quaternion forward = Quaternion::FORWARD();
     precission angleCos =  dot(normalized, forward);
     precission angleSin = length(cross(normalized, forward));
-    constexpr precission half35mm = 36.0/2.0; // NOTE: 35mm is 24 x 36 mm
+    constexpr precission half35mm = 36.0/2.0; // NOTE: sensor size of 35mm format is 24 x 36 mm
     return angleCos/angleSin * half35mm;
 }
 
@@ -278,15 +278,15 @@ public:
     VanishingPoint & as_vanishingPoint() {
         return const_cast<VanishingPoint &>(static_cast<const NodeWrapper &>(*this).as_vanishingPoint());
     }
-    const BaseProjection * as_projection() const {
+    const Projection * as_projection() const {
         if (node.is(NodeVariant::NODE_TYPE::RECTILINEAR_PROJECTION)) {
             return &node.get<RectilinearProjection>();
         } else {
             return &node.get<CurvilinearPerspective>();
         }
     }
-    BaseProjection * as_projection() {
-        return const_cast<BaseProjection *>(static_cast<const NodeWrapper &>(*this).as_projection());
+    Projection * as_projection() {
+        return const_cast<Projection *>(static_cast<const NodeWrapper &>(*this).as_projection());
     }
     PerspectiveGroup & as_group() {
         return node.get<PerspectiveGroup>();
@@ -314,6 +314,7 @@ public:
     void update_child_dir(NodeWrapper * child_node) {
         as_space().update_child_dir(child_node->as_vanishingPoint());
     }
+    // TODO make private?
     void add_child(NodeWrapper * child){
         _children.push_back(child);
     }
@@ -386,13 +387,15 @@ public:
         if (!is_vanishing_point()) {
             return "";
         } else {
-            auto angles = vector_to_angle(as_vanishingPoint().get_direction());
-            auto focalLenth = vector_to_lens_mm(as_vanishingPoint().get_direction());
+            Quaternion direction = as_vanishingPoint().get_direction();
+            auto angles = vector_to_angle(direction);
+            auto focalLenth = vector_to_lens_mm(direction);
             // TODO move to python
-            return std::to_string(angles.first * (180.0/M_PI)) + "°, " + std::to_string(angles.second * (180.0/M_PI)) + "°, " + std::to_string(focalLenth) + "mm";
+            const char * degreePart = "°, ";
+            return std::to_string(angles.first * (180.0/M_PI)) + degreePart + std::to_string(angles.second * (180.0/M_PI)) + degreePart + std::to_string(focalLenth) + "mm";
         }
     }
-    PerspectiveLine * get_line(Complex origin) {
+    std::shared_ptr<PerspectiveLine> get_line(Complex origin) {
         NodeWrapper * view = get_view();
         return view->as_projection()->get_line(as_vanishingPoint(), origin);
     }
@@ -519,31 +522,31 @@ public:
         Plane & plane = src[0]->as_plane();
         NodeWrapper* base = src[1];
         NodeWrapper* direction = src[2];
-        
+
         Quaternion planeNormal = plane.get_normal();
         auto * projection = get_view()->as_projection();
-        
+
         Quaternion baseRay = projection->calc_direction(base->get_position());
         Quaternion dirRay = projection->calc_direction(direction->get_position());
-        
+
         precission baseRayDotSign = dot(planeNormal, baseRay);
         precission dirRayDotSign = dot(planeNormal, dirRay);
         // test if points lie on same side of horizon
         if (baseRayDotSign * dirRayDotSign <= 0) {
             return;
         }
-        
+
         Quaternion base3dPos = projection->intersect_view_ray_canvas(baseRay);
         Quaternion dir3dPos = intersect_view_ray_and_plane(planeNormal, base3dPos, dirRay);
-        
+
         Quaternion dir3d = dir3dPos - base3dPos;
-        
+
         Quaternion defaultUp = Quaternion(0, 1, 0, 0);
         Quaternion planeRotation = rotationBetwenVectors(defaultUp, planeNormal);
         Quaternion defaultForward = Quaternion(0, 0, 1, 0);
         Quaternion forwardDir = rotate(planeRotation, defaultForward);
         Quaternion rectRotation = rotationBetwenVectors(forwardDir, dir3d);
-        
+
         PerspectiveSpace & space = as_space();
         space.update_global_rotation(rectRotation * planeRotation);
     }
@@ -655,6 +658,7 @@ public:
 struct VisualizationData {
     std::string type;
     std::vector<int> nodes;
+    std::vector<precission> data;
 };
 
 
@@ -685,7 +689,7 @@ private:
         _root = rootPtr.get();
     }
 protected:
-    RawGraph to_raw_data() const;
+    RawGraph to_raw_data();
 public:
     GraphBase() {
         clear();
@@ -706,11 +710,11 @@ public:
     NodeWrapper * get_root() {
         return _root;
     }
-    
+
     const NodeWrapper * get_root() const {
         return _root;
     }
-    
+
     NodeWrapper * connect_sub_graph(NodeWrapper * localRoot);
 
     /** create sub graph from data and attach it as child of currently selected element */
@@ -719,7 +723,7 @@ public:
         connect_sub_graph(localRoot);
         return localRoot;
     }
-    
+
     /** initialize graph from data */
     void initialize_from_structure(RawGraph & data) {
         NodeWrapper * localRoot = create_from_structure(data);
@@ -733,9 +737,9 @@ public:
             computeNode->compute(this);
         }
     }
-    
+
     NodeWrapper * create_from_structure(RawGraph & data);
-    
+
     NodeWrapper * get_by_tag(const std::string & tag) {
         if (tags.count(tag)) {
             return tags[tag];
@@ -743,7 +747,7 @@ public:
             return nullptr;
         }
     }
-    
+
     NodeWrapper * get_by_uid(int uid) {
         if (nodeMap.count(uid)) {
             return nodeMap[uid];
@@ -751,41 +755,34 @@ public:
             return nullptr;
         }
     }
-    
-    NodeWrapper * remove_by_uid(int uid) {
-        NodeWrapper * node = get_by_uid(uid);
-        nodeMap.erase(uid);
-        for (auto vis = visualizations.begin(); vis != visualizations.end();) {
-            bool erased = false;
-            for (auto && nodeid : vis->nodes) {
-                if (nodeid == uid) {
-                    vis = visualizations.erase(vis);
-                    erased = true;
-                    break;
-                }
-            }
-            if (!erased) {
-                ++vis;
-            }
-        }
-        if (node) {
-            NodeWrapper * parent = node->get_parent();
-            if (parent) {
-                parent->remove_child(node);
-                return node;
-            }
-        }
-        return nullptr;
-    }
-    
+
+    NodeWrapper * remove_by_uid(int uid);
+
     std::vector<NodeWrapper *> get_points(NodeWrapper * nodeToDraw);
-    
+
     std::vector<NodeWrapper *> get_all_enabled_points(bool skipLocked = false);
-    
-    std::vector<const NodeWrapper *> get_all_nodes(NodeWrapper * parent);
-    
-    std::vector<VisualizationData> get_visualizations() {
+
+    std::vector<NodeWrapper *> get_all_nodes(NodeWrapper * parent);
+
+    std::vector<VisualizationData> get_visualizations_data() {
         return visualizations;
+    }
+
+    std::vector<VisualizationData *> get_visualizations() {
+        std::vector<VisualizationData *> res;
+        res.reserve(visualizations.size());
+        for (auto && vis : visualizations) {
+            res.push_back(&vis);
+        }
+        return res;
+    }
+
+    void add_visualization(const std::string & name, const std::vector<int> & nodes, const std::vector<precission> & data) {
+        visualizations.push_back(VisualizationData{
+            .type = name,
+            .nodes = nodes,
+            .data = data,
+        });
     }
 
     NodeWrapper * find_parent_space(NodeWrapper * node) {
@@ -799,7 +796,7 @@ public:
         }
         return nullptr;
     }
-    
+
     NodeWrapper * find_UI_parent(NodeWrapper * node) {
         NodeWrapper * parent = node->get_parent();
         while (parent != nullptr) {
@@ -811,14 +808,18 @@ public:
         }
         return nullptr;
     }
-
     std::vector<NodeWrapper *> get_logic_children(NodeWrapper * node);
 
     std::vector<NodeWrapper *> update_groups(NodeWrapper * group);
 
     void update(NodeWrapper * node, Complex pos);
 
-    /** convert dst to compute point */
+    /** modify \p dst, convert it to compute node
+     * @param dst node converted to compute node
+     * @param sources nodes connected no \p dst as compute function parameters
+     * @param fctName compute function name
+     * @param vlue additional compute function param
+     */
     void convert_to_compute_node(NodeWrapper * dst, std::vector<NodeWrapper*> & sources, const std::string & fctName, precission value) {
         for (auto && src : sources) {
             src->add_relative(dst, NodeRelation::COMPUTE);
@@ -830,6 +831,9 @@ public:
         dst->compute(this);
     }
 
+    /**
+     * @return true if graph has no data
+     */
     bool is_empty() const {
         return _is_empty;
     }

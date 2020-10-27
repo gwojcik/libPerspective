@@ -18,6 +18,7 @@
 #pragma once
 #include "Point.h"
 #include <vector>
+#include <memory>
 #include "log.h"
 
 
@@ -40,25 +41,15 @@ public:
     virtual std::vector<Complex> for_bbox(const Complex & corner_a, const Complex & corner_b) = 0;
 };
 
-
-/** @brief Base class for all projections */
-class Projection {
-public:
-    virtual ~Projection(){}
-    virtual void update_child(VanishingPoint & vp) = 0;
-    virtual void update_child(VanishingPoint & vp, const Complex & new_position) = 0;
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const = 0;
-};
-
-
 /** Common methods for more complex perspective prjections */
-class BaseProjection : public Projection {
+class Projection {
 protected:
     Complex center;
     Complex rotation;
     precission size;
 public:
-    BaseProjection(const Complex & left_pos, const Complex & right_pos) {
+    virtual ~Projection(){}
+    Projection(const Complex & left_pos, const Complex & right_pos) {
         Complex center = (left_pos + right_pos)/2.0;
 
         Complex diff = right_pos - center;
@@ -107,16 +98,20 @@ public:
         return pos * rotation * size + center;
     }
 
-    virtual void update_child(VanishingPoint & vp) override {
+    virtual void update_child(VanishingPoint & vp) {
         vp.set_position(this->calc_pos_from_dir(vp.get_direction()));
     }
-    virtual void update_child(VanishingPoint & vp, const Complex & new_position) override {
+    virtual void update_child(VanishingPoint & vp, const Complex & new_position) {
         vp.set_direction(this->calc_direction(new_position));
         vp.set_direction_local(vp.get_direction());
         vp.set_position(new_position);
     }
 
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const = 0;
+    virtual std::shared_ptr<PerspectiveLine> get_line(const VanishingPoint & vp, const Complex & start_position) const = 0;
+
+    virtual std::shared_ptr<PerspectiveLine> get_line(const Quaternion & direction, const Complex & start_position) const = 0;
+
+    virtual std::shared_ptr<HorizonLineBase> get_horizon_line(const Quaternion & up) const = 0;
 
     virtual Quaternion calc_direction(const Complex & pos) const = 0;
 
@@ -141,9 +136,9 @@ public:
  * Defines center of view, size and rotation of perspective projection.
  * Size defines how far away are -45° and +45° vanishing points
  */
-class RectilinearProjection : public BaseProjection {
+class RectilinearProjection : public Projection {
 public:
-    RectilinearProjection(const Complex & left_pos, const Complex & right_pos) : BaseProjection(left_pos, right_pos) {}
+    RectilinearProjection(const Complex & left_pos, const Complex & right_pos) : Projection(left_pos, right_pos) {}
 
     /** convert 2D model position to 3D direction vector */
     virtual Quaternion calc_direction(const Complex & model_pos) const override {
@@ -174,11 +169,11 @@ public:
         return dir_vec / vec_len;
     }
 
-    // FIXME memory leak
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const override;
+    virtual std::shared_ptr<PerspectiveLine> get_line(const VanishingPoint & vp, const Complex & start_position) const override;
 
-    // FIXME memory leak
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const override;
+    virtual std::shared_ptr<PerspectiveLine> get_line(const Quaternion & direction, const Complex & start_position) const override;
+
+    virtual std::shared_ptr<HorizonLineBase> get_horizon_line(const Quaternion & up) const override;
 
     virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) const override {
         return ray.scalar_mul(1.0 / ray.z);
@@ -201,9 +196,9 @@ public:
 
 
 /** Curvilinear Perspective for 4 and 5 point perspective */
-class CurvilinearPerspective : public BaseProjection {
+class CurvilinearPerspective : public Projection {
 public:
-    CurvilinearPerspective(const Complex & left_pos, const Complex & right_pos) : BaseProjection(left_pos, right_pos) {}
+    CurvilinearPerspective(const Complex & left_pos, const Complex & right_pos) : Projection(left_pos, right_pos) {}
 
     virtual Complex calc_pos_from_dir(const Quaternion & direction) const override {
         Quaternion dirNormalized = normalize(direction);
@@ -222,11 +217,11 @@ public:
         return Quaternion(internal.real(), internal.imag(), z, 0);
     }
 
-    // FIXME memory leak
-    virtual PerspectiveLine * get_line(const VanishingPoint & vp, const Complex & start_position) const override;
+    virtual std::shared_ptr<PerspectiveLine> get_line(const VanishingPoint & vp, const Complex & start_position) const override;
 
-    // FIXME memory leak
-    virtual HorizonLineBase * get_horizon_line(const Quaternion & up) const override;
+    virtual std::shared_ptr<PerspectiveLine> get_line(const Quaternion & direction, const Complex & start_position) const override;
+
+    virtual std::shared_ptr<HorizonLineBase> get_horizon_line(const Quaternion & up) const override;
 
     /** use view space */
     virtual Quaternion intersect_view_ray_canvas(const Quaternion & ray) const override {

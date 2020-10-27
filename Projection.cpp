@@ -108,12 +108,12 @@ public:
 };
 class HorizonLineRectilinear : public HorizonLineBase {
 private:
-    const BaseProjection * projection;
+    const Projection * projection;
     Complex horizon_anchor_pos;
     Complex horizon_dir_2d;
     bool is_inf;
 public:
-    HorizonLineRectilinear(const BaseProjection * projection, const Quaternion & up) {
+    HorizonLineRectilinear(const Projection * projection, const Quaternion & up) {
         precission projected_len = std::hypot(up.x, up.y);
         this->projection = projection;
         if (projected_len == 0 || up.z == 0) {
@@ -150,7 +150,7 @@ public:
 };
 class HorizonLineCurvilinear : public HorizonLineBase {
 public:
-    HorizonLineCurvilinear(const BaseProjection * projection, const Quaternion & up) {
+    HorizonLineCurvilinear(const Projection * projection, const Quaternion & up) {
         (void) projection;
         (void) up;
         // TODO implement
@@ -165,18 +165,28 @@ public:
 };
 }
 
-PerspectiveLine * RectilinearProjection::get_line(const VanishingPoint& vp, const Complex& start_position) const {
-    return new PerspectiveLineSimple(this, vp, start_position);
+std::shared_ptr<PerspectiveLine> RectilinearProjection::get_line(const VanishingPoint& vp, const Complex& start_position) const {
+    return std::make_shared<PerspectiveLineSimple>(this, vp, start_position);
 }
 
-HorizonLineBase * RectilinearProjection::get_horizon_line(const Quaternion& up) const {
-    return new HorizonLineRectilinear(this, up);
+std::shared_ptr<PerspectiveLine> RectilinearProjection::get_line(const Quaternion& direction, const Complex& start_position) const {
+    VanishingPoint vp(direction);
+    return std::make_shared<PerspectiveLineSimple>(this, vp, start_position);
 }
 
-PerspectiveLine * CurvilinearPerspective::get_line(const VanishingPoint& vp, const Complex& start_position) const {
-    return new PerspectiveLineCurvilinear(this, vp, start_position);
+std::shared_ptr<HorizonLineBase> RectilinearProjection::get_horizon_line(const Quaternion& up) const {
+    return std::make_shared<HorizonLineRectilinear>(this, up);
 }
 
-HorizonLineBase * CurvilinearPerspective::get_horizon_line(const Quaternion& up) const {
-    return new HorizonLineCurvilinear(this, up);
+std::shared_ptr<PerspectiveLine> CurvilinearPerspective::get_line(const VanishingPoint& vp, const Complex& start_position) const {
+    return std::make_shared<PerspectiveLineCurvilinear>(this, vp, start_position);
+}
+
+std::shared_ptr<PerspectiveLine> CurvilinearPerspective::get_line(const Quaternion& direction, const Complex& start_position) const {
+    VanishingPoint vp(direction);
+    return std::make_shared<PerspectiveLineCurvilinear>(this, vp, start_position);
+}
+
+std::shared_ptr<HorizonLineBase> CurvilinearPerspective::get_horizon_line(const Quaternion& up) const {
+    return std::make_shared<HorizonLineCurvilinear>(this, up);
 }

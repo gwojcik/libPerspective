@@ -56,6 +56,7 @@ struct RawEdge {
 struct RawVisualization {
     std::string type;
     std::vector<std::string> nodes;
+    std::unique_ptr<std::vector<precission>> data;  // TODO default empty vector?
 };
 
 struct RawGraph {
