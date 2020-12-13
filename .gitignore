@@ -1,3 +1,5 @@
 build
+doxygen
+
 .kdev4
 libperspective.kdev4
