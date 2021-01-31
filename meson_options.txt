@@ -1,0 +1,11 @@
+option(
+    'python2',
+    type: 'feature',
+    value: 'disabled'
+)
+
+option(
+    'python3',
+    type: 'feature',
+    value: 'enabled'
+)
