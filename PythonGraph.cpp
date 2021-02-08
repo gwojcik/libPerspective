@@ -29,12 +29,12 @@ namespace {
         return std::string(PyString_AsString(objStr));
 #endif
     }
-    
+
     std::string python_type_string(PyObject * obj) {
         PyObject * type = PyObject_Type(obj);
         return python_to_string(type);
     }
-    
+
     struct pyDictReader;
 
     struct pyListReader {
@@ -84,7 +84,7 @@ namespace {
         }
         return python_to_string(item);
     }
-    
+
     struct pyDictReader {
     private:
         PyObject * dict;
@@ -243,7 +243,7 @@ namespace {
         if (reader.has("rotation_local")) {
             rawNode.rotation_local = std::make_unique<Quaternion>(reader.get<Quaternion>("rotation_local"));
         }
-        
+
         if (reader.has("is_UI")) {
             rawNode.is_UI = std::make_unique<int>(reader.get<int>("is_UI"));
         }
@@ -388,10 +388,10 @@ RawGraph python_to_raw_data(PyObject* data) {
     if (allData.has("version")) {
         rawGraph.version = std::make_unique<std::string>(allData.as_string("version"));
     }
-    
+
     rawGraph.root = allData.as_string("root");
     pyListReader nodes = allData.getList("nodes");
-    
+
     forEachDict(nodes, [&rawGraph](pyDictReader nodeData){
         RawNode rawNode;
         rawNode.id = nodeData.as_string("id");
@@ -409,8 +409,7 @@ RawGraph python_to_raw_data(PyObject* data) {
     pyListReader edges = allData.getList("edges");
     forEachDict(edges, [&rawGraph](pyDictReader edgeData) {
         if (!edgeData.has("src") || !edgeData.has("dst")) {
-            std::cout << "edge format is incorrect\n";
-            std::exit(1);
+            throw std::runtime_error("edge format is incorrect, missing 'src' or 'dst'");
         }
         RawEdge rawEdge;
         rawEdge.src = edgeData.as_string("src");
@@ -420,7 +419,7 @@ RawGraph python_to_raw_data(PyObject* data) {
         }
         rawGraph.edges.push_back(std::move(rawEdge));
     });
-    
+
     if (allData.has("visualizations")) {
         pyListReader visualizations = allData.getList("visualizations");
         rawGraph.visualizations = std::make_unique<std::vector<RawVisualization>>();
@@ -436,7 +435,7 @@ RawGraph python_to_raw_data(PyObject* data) {
             rawVisualization.push_back(rawVis);
         });
     }
-    
+
     return rawGraph;
 }
 

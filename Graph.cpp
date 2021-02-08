@@ -121,11 +121,9 @@ namespace {
 
     PerspectiveSpace space_from_python(RawNode & node){
         if (!node.rotation && !node.up) {
-            std::cout << "missing rotation for perspective space\n";
-            std::exit(1);
+            throw std::runtime_error("missing rotation for perspective space");
         } else if (node.rotation && !node.rotation_local) {
-            std::cout << "missing local rotation for perspective space\n";
-            std::exit(1);
+            throw std::runtime_error("missing local rotation for perspective space");
         }
 
         if (node.up) {
@@ -174,8 +172,7 @@ namespace {
             auto element = space_from_python(node);
             return std::make_shared<NodeWrapper>(element, name);
         } else {
-            std::cout << "unknown perspective element type\n";
-            std::exit(1);
+            throw std::runtime_error("unknown perspective element type '" + name + "'");
         }
     }
 
@@ -198,7 +195,7 @@ namespace {
             throw std::runtime_error("unknown edge element type " + *edgeType);
         }
     }
-    
+
     std::shared_ptr<NodeWrapper> node_from_raw_data(RawNode & rawNode) {
         std::shared_ptr<NodeWrapper> node = base_node_from_python(rawNode);
 
@@ -553,7 +550,7 @@ RawGraph GraphBase::to_raw_data() const {
         }
         result.nodes.push_back(std::move(rawNode));
     });
-    
+
     if (this->visualizations.size()) {
         result.visualizations = std::make_unique<std::vector<RawVisualization>>();
     }
@@ -566,7 +563,7 @@ RawGraph GraphBase::to_raw_data() const {
         }
         result.visualizations->push_back(visualizationData);
     }
-    
+
     result.root =  std::to_string(get_root()->uid);
     result.version = std::make_unique<std::string>("0.3.0");
     return result;
@@ -574,7 +571,7 @@ RawGraph GraphBase::to_raw_data() const {
 
 NodeWrapper * GraphBase::create_from_structure(RawGraph& data){
     _is_empty = false;
-    
+
     if (data.version) {
         std::string version = *data.version;
         if (*data.version != "0.3.0") {
@@ -582,34 +579,34 @@ NodeWrapper * GraphBase::create_from_structure(RawGraph& data){
             throw std::runtime_error("unsupported version: " + version);
         }
     }
-    
+
     if (!(data.nodes.size() && data.root.size())){
         throw std::runtime_error("bad structure - Graph");
     }
-    
+
     const std::string & root = data.root;
     std::map<std::string, int> idMap;
-    
+
     for (auto && rawNode : data.nodes) {
         std::string dataId = rawNode.id;
         std::shared_ptr<NodeWrapper> node = node_from_raw_data(rawNode);
         idMap[dataId] = node->uid;
-        
+
         this->nodes.push_back(node);
         this->nodeMap[node->uid] = node.get();
         if (rawNode.tag) {
             this->tags[*rawNode.tag] = node.get();
         }
-        
+
         if ((rawNode.type == "RectilinearProjection" || rawNode.type == "CurvilinearPerspective") && this->main_view == nullptr) {
             this->main_view = node.get();
         }
     }
-    
+
     for (auto && rawEdge : data.edges) {
         add_edge( get_by_uid(idMap[rawEdge.dst]), get_by_uid(idMap[rawEdge.src]), rawEdge.type );
     }
-    
+
     if (data.visualizations) {
         for (auto && rawVis : *data.visualizations) {
             VisualizationData visualization;
